@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Tic Tac Toe — Move Twists</title>
+  <style>
+    html,body { height:100%; margin:0; }
+    body{
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      color: white;
+      height:100vh;
+      overflow:hidden;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background:#0f0f12;
+    }
+
+    /* Canvas bg fills screen */
+    #bgCanvas {
+      position: fixed; inset:0; z-index:0; display:block;
+    }
+
+    /* UI layered on top */
+    .ui { position: relative; z-index:2; width:100%; max-width:760px; padding:24px; box-sizing:border-box; text-align:center; }
+
+    h1 {
+      font-size: 4rem;
+      margin: 6px 0 14px 0;
+      color: #ff4da6;
+      text-shadow: 0 0 12px rgba(255,77,166,0.85);
+    }
+
+    .controls { margin-bottom: 14px; }
+
+    .name-input { display:flex; gap:10px; justify-content:center; align-items:center; margin-bottom:12px; }
+    .name-input input {
+      padding:10px 12px;
+      border-radius:8px;
+      border:2px solid rgba(255,255,255,0.12);
+      background: transparent;
+      color: white;
+      outline:none;
+      min-width:180px;
+      text-align:center;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.45);
+    }
+
+    .btn {
+      background: linear-gradient(90deg,#ff4da6,#ff66b2);
+      border:none;
+      padding:10px 14px;
+      border-radius:10px;
+      cursor:pointer;
+      font-weight:700;
+      color:white;
+      box-shadow: 0 8px 22px rgba(255,77,166,0.16);
+    }
+
+    .btn.secondary {
+      background: transparent;
+      border: 2px solid rgba(255,255,255,0.08);
+      color: #fff;
+      box-shadow:none;
+    }
+
+    .grid-wrapper {
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      perspective: 1200px;
+      margin: 8px 0 10px 0;
+    }
+
+    .grid {
+      display:grid;
+      grid-template-columns: repeat(3, 120px);
+      grid-gap: 12px;
+    }
+
+    .cell {
+      width:120px;
+      height:120px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size:44px;
+      font-weight:800;
+      border-radius:12px;
+      user-select:none;
+      background: linear-gradient(180deg, rgba(106,30,85,0.95), rgba(91,25,72,0.9));
+      box-shadow: inset 0 -8px 22px rgba(0,0,0,0.45);
+      cursor:pointer;
+      transition: transform 520ms cubic-bezier(.2,.9,.2,1);
+      color: #fff;
+      transform-origin: center center;
+    }
+
+    .cell:hover { 
+      transform: translateY(-6px) scale(1.02); 
+    }
+
+    /* responsive */
+    @media (max-width:520px) {
+      .grid { grid-template-columns: repeat(3, 84px); grid-gap:8px; }
+      .cell { width:84px; height:84px; font-size:34px; border-radius:10px; }
+    }
+
+    .scoreboard { display:flex; gap:16px; justify-content:center; margin-top:8px; flex-wrap:wrap; font-weight:700; }
+    .score { background: rgba(255,255,255,0.03); padding:8px 12px; border-radius:10px; }
+
+    #tttResult { margin-top:10px; min-height:1.6em; color:#ffea70; text-shadow: 0 0 8px rgba(255,234,112,0.9); font-weight:700; }
+
+  </style>
+</head>
+<body>
+  <canvas id="bgCanvas"></canvas>
+
+  <div class="ui">
+    <h1> Twist Tac Toe </h1>
+    <h2>Are you ready??</h2>
+    <!-- name screen -->
+    <div id="nameScreen" class="controls">
+      <div class="name-input">
+        <input id="playerNameInput" placeholder="Your name" />
+        <button class="btn" onclick="startGame()">Start Game</button>
+      </div>
+      <div style="font-size:0.95rem; color:rgba(255,255,255,0.7)">
+        <strong>What's different:</strong> After every turn each cell rotates 90° clockwise.
+        <h3></h3>
+        <h4><strong>So plan your moves accordingly!</strong></h4><br/>
+      </div>
+    </div>
+
+    <!-- game area -->
+    <div id="gameArea" style="display:none;">
+      <div id="greeting" style="font-weight:700; margin-bottom:8px"></div>
+
+      <div class="grid-wrapper">
+        <div id="grid" class="grid" aria-label="Tic Tac Toe board"></div>
+      </div>
+
+      <div id="tttResult"></div>
+
+      <div style="margin-top:12px">
+        <button class="btn" onclick="resetTTT()">Restart Game</button>
+        <button class="btn secondary" onclick="resetAll()">Reset Scores</button>
+        <button class="btn secondary" onclick="changePlayer()">Change Player</button>
+      </div>
+
+      <div class="scoreboard">
+        <div class="score">😊 <span id="playerLabel">You</span>: <strong id="playerScore">0</strong></div>
+        <div class="score">💻 Computer: <strong id="computerScore">0</strong></div>
+        <div class="score">🤝 Draws: <strong id="draws">0</strong></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  /* =========================
+     Canvas Dynamic Background (particles + glow)
+     ========================= */
+  (function () {
+    const canvas = document.getElementById('bgCanvas');
+    const ctx = canvas.getContext('2d', { alpha: true });
+    let w = canvas.width = innerWidth;
+    let h = canvas.height = innerHeight;
+    const DPR = Math.max(1, window.devicePixelRatio || 1);
+    canvas.width = w * DPR;
+    canvas.height = h * DPR;
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
+    ctx.scale(DPR, DPR);
+
+    const palette = ['255,77,166','112,76,255','79,220,192'];
+    function rand(a,b){ return Math.random()*(b-a)+a; }
+
+    class P {
+      constructor() { this.reset(true); }
+      reset(first=false){
+        this.x = rand(0,w);
+        this.y = first ? rand(0,h) : h + rand(0, h*0.18);
+        this.r = rand(1.4,4.6);
+        this.speed = rand(8,40);
+        this.angle = rand(-0.6,0.6);
+        this.life = rand(6,18);
+        this.age = 0;
+        this.c = palette[Math.floor(Math.random()*palette.length)];
+        this.o = rand(0.06,0.22);
+      }
+      update(dt){
+        this.age += dt;
+        this.y -= this.speed*dt;
+        this.x += Math.sin(this.age*0.6)*this.angle*6;
+        if(this.y < -20 || this.age > this.life) this.reset();
+      }
+      draw(ctx){
+        ctx.beginPath();
+        ctx.fillStyle = `rgba(${this.c}, ${this.o})`;
+        ctx.arc(this.x, this.y, this.r, 0, Math.PI*2);
+        ctx.fill();
+      }
+    }
+
+    const NUM = Math.max(20, Math.round((w*h)/65000));
+    const parts = Array.from({length:NUM}, ()=> new P());
+
+    let glowShift = 0;
+    let last = performance.now();
+    function loop(now){
+      const dt = (now-last)/1000; last = now;
+      ctx.clearRect(0,0,w,h);
+
+      // base grad
+      const g = ctx.createLinearGradient(0,0,w,h);
+      g.addColorStop(0, 'rgba(6,6,8,0.66)');
+      g.addColorStop(0.5, 'rgba(15,12,20,0.44)');
+      g.addColorStop(1, 'rgba(12,6,12,0.66)');
+      ctx.fillStyle = g; ctx.fillRect(0,0,w,h);
+
+      glowShift += dt*0.08;
+      const gx = w * (0.55 + Math.sin(glowShift)*0.08);
+      const gy = h * (0.35 + Math.cos(glowShift*0.7)*0.06);
+      const glow = ctx.createRadialGradient(gx,gy,0,gx,gy,Math.max(w,h)*0.9);
+      glow.addColorStop(0,'rgba(255,77,166,0.06)');
+      glow.addColorStop(0.3,'rgba(112,76,255,0.04)');
+      glow.addColorStop(1,'rgba(10,10,12,0)');
+      ctx.fillStyle = glow; ctx.fillRect(0,0,w,h);
+
+      for(const p of parts){ p.update(dt); p.draw(ctx); }
+
+      // subtle connecting lines
+      ctx.beginPath();
+      for(let i=0;i<parts.length;i++){
+        const a = parts[i];
+        for(let j=i+1;j<i+3 && j<parts.length;j++){
+          const b = parts[j];
+          const dx = a.x-b.x, dy = a.y-b.y;
+          const dist = Math.sqrt(dx*dx+dy*dy);
+          if(dist < 120){
+            ctx.strokeStyle = `rgba(180,160,220, ${0.01 + (120-dist)/120 * 0.06})`;
+            ctx.lineWidth = 1;
+            ctx.moveTo(a.x,a.y);
+            ctx.lineTo(b.x,b.y);
+          }
+        }
+      }
+      ctx.stroke();
+
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+
+    window.addEventListener('resize', ()=>{
+      w = canvas.width = innerWidth; h = canvas.height = innerHeight;
+      canvas.width = w * DPR; canvas.height = h * DPR;
+      canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+      ctx.scale(DPR, DPR);
+    }, {passive:true});
+  })();
+
+
+  /* =========================
+     Tic Tac Toe with Individual Cell Rotation
+     ========================= */
+
+  let board; // logical board (indices 0..8)
+  let playerScore = 0, computerScore = 0, draws = 0;
+  let playerName = "You";
+  let gameOver = false;
+  let cellRotations = Array(9).fill(0); // track rotation for each cell individually
+
+  const gridEl = document.getElementById('grid');
+
+  function startGame(){
+    const nameInput = document.getElementById("playerNameInput").value.trim();
+    if(nameInput) playerName = nameInput;
+    document.getElementById("playerLabel").innerText = playerName;
+    document.getElementById("greeting").innerText = `Good luck, ${playerName}! 🎉`;
+    document.getElementById("nameScreen").style.display = "none";
+    document.getElementById("gameArea").style.display = "block";
+    resetTTT();
+  }
+
+  function changePlayer(){
+    document.getElementById("nameScreen").style.display = "block";
+    document.getElementById("gameArea").style.display = "none";
+    document.getElementById("playerNameInput").value = "";
+  }
+
+  function resetAll(){
+    playerScore = 0; computerScore = 0; draws = 0;
+    updateScoreDisplay();
+    resetTTT();
+  }
+
+  function resetTTT(){
+    board = Array(9).fill('');
+    gameOver = false;
+    cellRotations = Array(9).fill(0); // reset all cell rotations
+    
+    // clear grid and build cells with IDs
+    gridEl.innerHTML = '';
+    for(let i=0;i<9;i++){
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.id = `cell-${i}`; // Give each cell a unique ID
+      cell.onclick = () => handleCellClick(i);
+      gridEl.appendChild(cell);
+    }
+    
+    document.getElementById('tttResult').innerText = '';
+    renderBoard();
+  }
+
+  function rotateCellsIndividually(){
+    // Rotate each cell by 90 degrees clockwise
+    for(let i = 0; i < 9; i++){
+      cellRotations[i] = (cellRotations[i] + 90) % 360;
+      const cell = document.getElementById(`cell-${i}`);
+      if(cell){
+        cell.style.transform = `rotate(${cellRotations[i]}deg)`;
+      }
+    }
+  }
+
+  function handleCellClick(index){
+    if(gameOver) return;
+    if(board[index] !== '') return; // occupied
+    
+    board[index] = 'X';
+    renderBoard();
+
+    // after player's move, check status
+    const statusAfterPlayer = getStatus();
+    if(statusAfterPlayer){
+      finalizeStatus(statusAfterPlayer);
+      return;
+    }
+
+    // rotate all cells individually
+    rotateCellsIndividually();
+
+    // give a slight delay before computer move to feel natural
+    setTimeout(() => {
+      computerMakeMove();
+    }, 320);
+  }
+
+  function computerMakeMove(){
+    if(gameOver) return;
+    
+    // choose a random empty index
+    const emptyIndices = board.map((v,i)=> v === '' ? i : null).filter(x=> x!==null);
+    if(emptyIndices.length === 0) {
+      const status = getStatus();
+      if(status) finalizeStatus(status);
+      return;
+    }
+    
+    const computerMove = emptyIndices[Math.floor(Math.random()*emptyIndices.length)];
+    board[computerMove] = 'O';
+    renderBoard();
+
+    const statusAfterComp = getStatus();
+    if(statusAfterComp){
+      finalizeStatus(statusAfterComp);
+      return;
+    }
+
+    // after computer move, rotate all cells again
+    rotateCellsIndividually();
+  }
+
+  function renderBoard(){
+    for(let i = 0; i < 9; i++){
+      const cell = document.getElementById(`cell-${i}`);
+      if(cell){
+        cell.innerText = board[i] || '';
+      }
+    }
+  }
+
+  function getStatus(){
+    const combos = [
+      [0,1,2],[3,4,5],[6,7,8],
+      [0,3,6],[1,4,7],[2,5,8],
+      [0,4,8],[2,4,6]
+    ];
+    for(const [a,b,c] of combos){
+      if(board[a] && board[a] === board[b] && board[a] === board[c]){
+        return board[a] === 'X' ? 'player' : 'computer';
+      }
+    }
+    if(board.every(x=> x !== '')) return 'draw';
+    return null;
+  }
+
+  function finalizeStatus(status){
+    gameOver = true;
+    showResult(status);
+    updateScore(status);
+  }
+
+  function showResult(status){
+    const out = document.getElementById('tttResult');
+    if(status === 'player') out.innerText = `🎉 YAYY ${playerName} won!`;
+    else if(status === 'computer') out.innerText = `💻 oops.. the computer won!`;
+    else out.innerText = `ugh... It's a Draw!`;
+  }
+
+  function updateScore(status){
+    if(status === 'player') playerScore++;
+    else if(status === 'computer') computerScore++;
+    else if(status === 'draw') draws++;
+    updateScoreDisplay();
+  }
+
+  function updateScoreDisplay(){
+    document.getElementById('playerScore').innerText = playerScore;
+    document.getElementById('computerScore').innerText = computerScore;
+    document.getElementById('draws').innerText = draws;
+  }
+
+  // init
+  resetTTT();
+
+  // expose to global for buttons
+  window.startGame = startGame;
+  window.changePlayer = changePlayer;
+  window.resetAll = resetAll;
+  window.resetTTT = resetTTT;
+
+  </script>
+</body>
+</html>
